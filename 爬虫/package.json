@@ -1,1 +1,0 @@
-{"name":"crawler-demo","version":"1.0.0","dependencies":{"@mozilla/readability":"^0.6.0","axios":"^1.14.0","express":"^5.2.1","https-proxy-agent":"^8.0.0","jsdom":"^29.0.1","marked":"^17.0.5","turndown":"^7.2.2"}}
