@@ -237,3 +237,6 @@ Sub Agent (上下文隔离)
 
 > 最后更新: 2026-04-27
 > 自动生成: Claude Code AI 目录生成器
+
+---
+> ⚠️ 目录自动生成失败，请检查 GitHub Actions 日志

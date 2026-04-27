@@ -1,6 +1,7 @@
 # React 底层原理与架构演进
 
 ## 目录
+
 - [一、React 核心原理](#一react-核心原理)
   - [1.1 虚拟DOM (Virtual DOM)](#11-虚拟dom-virtual-dom)
   - [1.2 Fiber 架构](#12-fiber-架构)
@@ -15,7 +16,7 @@
 - [三、架构演变的深层考量](#三架构演变的深层考量)
 - [四、性能优化手段](#四性能优化手段)
 
----
+***
 
 ## 一、React 核心原理
 
@@ -53,7 +54,7 @@ const virtualDOM = {
 1. **批量更新（Batching）**: 将多次状态变更合并为一次DOM操作
 2. **跨浏览器兼容**: 抽象了不同浏览器的差异
 3. **声明式编程**: 开发者只需描述UI应该是什么样子，不需要关心如何更新
-4. **Diff算法优化**: 通过对比找出最小变更集
+4. **Diff算法优化**: 通过对比找出最小变更集 diff本质上 其实是弥补虚拟dom带来的大量的dom操作
 
 #### 1.1.3 虚拟DOM的工作流程
 
@@ -159,6 +160,7 @@ function performUnitOfWork(fiber) {
 ```
 
 **双缓存的优势：**
+
 - 避免在构建过程中直接修改current树
 - 可以随时中断和恢复工作
 - 完成后直接切换指针，实现无缝替换
@@ -273,7 +275,7 @@ function reconcileSingleElement(returnFiber, currentFirstChild, element) {
 
 **Element Diff（元素对比）- 同层列表Diff：**
 
-这是最复杂的部分，使用了**最长递增子序列（LIS）**算法：
+这是最复杂的部分，使用了\*\*最长递增子序列（LIS）\*\*算法：
 
 ```javascript
 function reconcileChildrenArray(returnFiber, currentFirstChild, newChildren) {
@@ -550,7 +552,7 @@ function isSubsetOfLanes(set, subset) {
 }
 ```
 
----
+***
 
 ## 二、React 架构演变历史
 
@@ -575,6 +577,7 @@ function renderComponent(component) {
 ```
 
 **特点：**
+
 - 使用 JavaScript 调用栈进行递归
 - 一旦开始就无法中断
 - 更新是同步的、原子的
@@ -1039,6 +1042,7 @@ async function BlogPost({ id }) {
 ```
 
 **Server Components的优势：**
+
 - 减少客户端JS bundle大小
 - 直接访问后端资源
 - 自动代码分割
@@ -1078,7 +1082,7 @@ function TodoList({ todos }) {
 }
 ```
 
----
+***
 
 ## 三、架构演变的深层考量
 
@@ -1381,7 +1385,7 @@ if (supportsConcurrency) {
 }
 ```
 
----
+***
 
 ## 四、性能优化手段
 
@@ -2634,13 +2638,14 @@ export async function getStaticProps() {
 // 4. 下一个请求获得最新内容
 ```
 
----
+***
 
 ## 总结
 
 ### React性能优化检查清单
 
 #### ✅ 组件层面
+
 - [ ] 使用 `React.memo` 包装纯展示组件
 - [ ] 合理使用 `useMemo` 缓存昂贵的计算
 - [ ] 使用 `useCallback` 缓存传递给子组件的回调
@@ -2648,28 +2653,33 @@ export async function getStaticProps() {
 - [ ] 合理拆分组件，隔离状态变化
 
 #### ✅ 列表渲染
+
 - [ ] 为列表项提供稳定的 `key`
 - [ ] 大数据量列表使用虚拟滚动
 - [ ] 避免在列表中使用匿名函数作为事件处理器
 
 #### ✅ 状态管理
+
 - [ ] 按更新频率和使用范围拆分状态
 - [ ] 复杂状态逻辑使用 `useReducer`
 - [ ] 拆分Context避免不必要的重渲染
 - [ ] 考虑使用外部状态管理库（Redux/Zustand/Jotai）
 
 #### ✅ 代码分割
+
 - [ ] 路由级别使用 `React.lazy` 懒加载
 - [ ] 大型组件按需加载
 - [ ] 实现预加载策略提升用户体验
 
 #### ✅ 网络请求
+
 - [ ] 实现请求缓存和去重
 - [ ] 快速连续请求使用取消机制
 - [ ] 配合Suspense处理异步数据
 - [ ] 实现乐观更新提升感知性能
 
 #### ✅ 监控与分析
+
 - [ ] 使用React DevTools Profiler定位性能瓶颈
 - [ ] 收集Core Web Vitals指标
 - [ ] 设置性能预算和告警
@@ -2690,3 +2700,4 @@ export async function getStaticProps() {
 - [React Deep Dive系列](https://github.com/nicehash/react-deep-dive)
 - [React源码解析](https://react.jokcy.me/)
 - [性能优化指南](https://web.dev/performance/)
+
