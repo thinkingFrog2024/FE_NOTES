@@ -4,7 +4,12 @@ import { execSync } from 'child_process';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
-const STATS_PATH = join(process.cwd(), 'STATS.md');
+// 获取仓库根目录（脚本可能在子目录运行）
+const ROOT_DIR = process.cwd().includes('.github/scripts')
+  ? join(process.cwd(), '../..')
+  : process.cwd();
+
+const STATS_PATH = join(ROOT_DIR, 'STATS.md');
 
 async function main() {
   console.log('开始统计文件字数...');
@@ -17,7 +22,7 @@ async function main() {
     // 统计每个文件的字数
     const stats = allFiles.map(file => {
       try {
-        const content = readFileSync(file, 'utf-8');
+        const content = readFileSync(join(ROOT_DIR, file), 'utf-8');
         const wordCount = countWords(content);
         return { file, wordCount };
       } catch {
@@ -46,9 +51,9 @@ async function main() {
   }
 }
 
-// 获取所有 Markdown 文件
+// 获取所有 Markdown 文件（使用根目录）
 function getAllMdFiles() {
-  const output = execSync('git ls-files "*.md"', { encoding: 'utf-8' });
+  const output = execSync('git ls-files "*.md"', { encoding: 'utf-8', cwd: ROOT_DIR });
   return output.trim().split('\n').filter(f =>
     f &&
     !f.includes('.github') &&
@@ -154,15 +159,15 @@ function generateReport(stats, totalWords) {
 
 // 提交变更
 function commitChanges() {
-  execSync('git config user.name "github-actions[bot]"', { encoding: 'utf-8' });
-  execSync('git config user.email "github-actions[bot]@users.noreply.github.com"', { encoding: 'utf-8' });
-  execSync('git add STATS.md', { encoding: 'utf-8' });
+  // 切换到根目录执行 git 操作
+  execSync(`git config user.name "github-actions[bot]"`, { encoding: 'utf-8', cwd: ROOT_DIR });
+  execSync(`git config user.email "github-actions[bot]@users.noreply.github.com"`, { encoding: 'utf-8', cwd: ROOT_DIR });
+  execSync(`git add STATS.md`, { encoding: 'utf-8', cwd: ROOT_DIR });
 
   // 检查是否有变更
-  const status = execSync('git status --porcelain', { encoding: 'utf-8' });
+  const status = execSync('git status --porcelain', { encoding: 'utf-8', cwd: ROOT_DIR });
   if (status.includes('STATS.md')) {
-    execSync('git commit -m "Update STATS.md with word count statistics"', { encoding: 'utf-8' });
-    execSync('git push origin HEAD', { encoding: 'utf-8' });
+    execSync(`git commit -m "Update STATS.md with word count statistics"`, { encoding: 'utf-8', cwd: ROOT_DIR });
     console.log('统计报告已提交');
   } else {
     console.log('无变更，跳过提交');
