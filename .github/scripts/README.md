@@ -26,7 +26,7 @@
 - [Node.js模块系统](./docs/node/modules.md) - CommonJS模块规范和npm包管理 ⬆️ [Node.js基础](./docs/node/basic.md) ➡️ [Node.js Express框架](./docs/node/express.md)
 - [Node.js Express框架](./docs/node/express.md) - Express框架的使用和中间件开发 ⬆️ [Node.js模块系统](./docs/node/modules.md) 🔗 [前端工程化](./docs/engineering/webpack.md)
 - [Node.js数据库操作](./docs/node/database.md) - 使用Node.js操作MongoDB和MySQL ⬆️ [Node.js基础](./docs/node/basic.md) ➡️ [Node.js API开发](./docs/node/api.md)
-- [Node.js API开发](./docs/node/api.md) - RESTful API设计和开发 ⬆️ [Node.js Express框架](./docs/node/express.md) 🔗 [前端工程化](./docs/engineing/testing.md)
+- [Node.js API开发](./docs/node/api.md) - RESTful API设计和开发 ⬆️ [Node.js Express框架](./docs/node/express.md) 🔗 [前端工程化](./docs/engineering/testing.md)
 
 ## 前端工程化
 - [Webpack基础](./docs/engineering/webpack.md) - Webpack打包工具的基本配置和使用 ⬆️ [JavaScript基础语法](./docs/javascript/basic-syntax.md) ➡️ [Webpack优化](./docs/engineering/webpack-optimization.md)
