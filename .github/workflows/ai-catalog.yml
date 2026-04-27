@@ -1,0 +1,45 @@
+name: AI Catalog Generator
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.md'
+      - 'JS CSS HTML/**'
+      - 'JacaScript/**'
+      - 'vue/**'
+      - 'code-react/**'
+      - '工程化相关/**'
+      - '网络和浏览器/**'
+      - '面试题/**'
+      - 'AI/**'
+
+permissions:
+  contents: write
+
+jobs:
+  generate-catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # 需要 fetch-depth >= 2 来获取 git diff
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate catalog
+        env:
+          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
+        run: |
+          cd .github/scripts
+          node generate-catalog.js
+
+      - name: Push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git push

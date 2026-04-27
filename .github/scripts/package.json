@@ -1,0 +1,11 @@
+{
+  "name": "ai-catalog-generator",
+  "version": "1.0.0",
+  "description": "使用 AI 生成知识图谱式目录",
+  "type": "module",
+  "main": "generate-catalog.js",
+  "scripts": {
+    "generate": "node generate-catalog.js"
+  },
+  "dependencies": {}
+}
