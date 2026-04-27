@@ -28,10 +28,12 @@ async function main() {
     const relatedFiles = findRelatedFiles(changedFiles);
     console.log(`关联文件: ${relatedFiles.length} 个`);
 
-    // 4. 读取当前 README.md
-    const currentReadme = existsSync(README_PATH)
+    // 4. 读取当前 README.md，清除旧的错误提示
+    let currentReadme = existsSync(README_PATH)
       ? readFileSync(README_PATH, 'utf-8')
       : '# 前端学习笔记目录\n\n';
+    // 清除之前失败留下的错误提示
+    currentReadme = currentReadme.replace(/\n*---\n> ⚠️ 目录自动生成失败.*\n?/g, '');
 
     // 5. 调用智谱 AI API
     const newReadme = await callZhipuAI(currentReadme, changes, relatedFiles);
