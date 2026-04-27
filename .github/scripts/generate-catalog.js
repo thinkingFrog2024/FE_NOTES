@@ -2,11 +2,13 @@
 
 import { execSync } from 'child_process';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join, dirname, basename } from 'path';
+import { join, resolve, dirname, basename } from 'path';
 
+// 获取仓库根目录
+const ROOT_DIR = resolve(process.cwd(), process.cwd().includes('.github/scripts') ? '../..' : '.');
 const ZHIPU_API_KEY = process.env.ZHIPU_API_KEY;
 const ZHIPU_API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-const README_PATH = join(process.cwd(), 'README.md');
+const README_PATH = join(ROOT_DIR, 'README.md');
 
 async function main() {
   console.log('开始分析变更并生成目录...');
@@ -61,12 +63,12 @@ async function main() {
 function getChangedFiles() {
   try {
     // 获取最近两次 commit 之间的变更
-    const diffOutput = execSync('git diff --name-only HEAD~1 HEAD', { encoding: 'utf-8' });
+    const diffOutput = execSync('git diff --name-only HEAD~1 HEAD', { encoding: 'utf-8', cwd: ROOT_DIR });
     const files = diffOutput.trim().split('\n').filter(f => f.endsWith('.md'));
     return files.filter(f => !f.includes('.github')); // 排除脚本自身
   } catch {
     // 如果是首次 commit，获取所有 md 文件
-    const allFiles = execSync('git ls-files "*.md"', { encoding: 'utf-8' });
+    const allFiles = execSync('git ls-files "*.md"', { encoding: 'utf-8', cwd: ROOT_DIR });
     return allFiles.trim().split('\n').filter(f => f && !f.includes('.github'));
   }
 }
@@ -76,15 +78,16 @@ function analyzeChanges(files) {
   const changes = [];
   for (const file of files) {
     try {
-      const diff = execSync(`git diff HEAD~1 HEAD -- "${file}"`, { encoding: 'utf-8' });
-      const content = readFileSync(file, 'utf-8');
+      // 使用 git show 获取最新版本内容（适用于新增和修改的文件）
+      const content = execSync(`git show HEAD:"${file}"`, { encoding: 'utf-8', cwd: ROOT_DIR, maxBuffer: 1024 * 1024 * 10 });
+      const diff = execSync(`git diff HEAD~1 HEAD -- "${file}"`, { encoding: 'utf-8', cwd: ROOT_DIR });
       changes.push({
         file,
         diff: diff.slice(0, 2000), // 截取前 2000 字符避免过长
         summary: getFirstLines(content, 20) // 取前 20 行作为摘要
       });
-    } catch {
-      console.log(`无法读取文件: ${file}`);
+    } catch (e) {
+      console.log(`无法读取文件: ${file} - ${e.message}`);
     }
   }
   return changes;
@@ -105,7 +108,7 @@ function findRelatedFiles(changedFiles) {
 
     // 同目录下的其他 md 文件
     try {
-      const sameDirFiles = execSync(`git ls-files "${dir}/*.md"`, { encoding: 'utf-8' });
+      const sameDirFiles = execSync(`git ls-files "${dir}/*.md"`, { encoding: 'utf-8', cwd: ROOT_DIR });
       sameDirFiles.trim().split('\n').forEach(f => {
         if (f && f !== file) related.add(f);
       });
@@ -113,13 +116,13 @@ function findRelatedFiles(changedFiles) {
 
     // 检测文件内容中的引用链接
     try {
-      const content = readFileSync(file, 'utf-8');
+      const content = execSync(`git show HEAD:"${file}"`, { encoding: 'utf-8', cwd: ROOT_DIR, maxBuffer: 1024 * 1024 * 5 });
       const links = content.match(/\[.*?\]\(\.?\/.*?\.md\)/g) || [];
       links.forEach(link => {
         const match = link.match(/\]\(\.?\/(.*?\.md)\)/);
         if (match) {
-          const linkPath = join(dir, match[1]).replace(process.cwd() + '/', '');
-          if (existsSync(linkPath)) related.add(linkPath);
+          const linkPath = join(ROOT_DIR, dir, match[1]).replace(ROOT_DIR + '/', '');
+          if (existsSync(join(ROOT_DIR, linkPath))) related.add(linkPath);
         }
       });
     } catch {}
@@ -200,11 +203,11 @@ ${relatedFiles.join('\n')}
 
 // 提交变更
 function commitChanges() {
-  execSync('git config user.name "github-actions[bot]"', { encoding: 'utf-8' });
-  execSync('git config user.email "github-actions[bot]@users.noreply.github.com"', { encoding: 'utf-8' });
-  execSync('git add README.md', { encoding: 'utf-8' });
-  execSync('git commit -m "Update README catalog based on latest changes"', { encoding: 'utf-8' });
-  execSync('git push', { encoding: 'utf-8' });
+  execSync('git config user.name "github-actions[bot]"', { encoding: 'utf-8', cwd: ROOT_DIR });
+  execSync('git config user.email "github-actions[bot]@users.noreply.github.com"', { encoding: 'utf-8', cwd: ROOT_DIR });
+  execSync('git add README.md', { encoding: 'utf-8', cwd: ROOT_DIR });
+  execSync('git commit -m "Update README catalog based on latest changes"', { encoding: 'utf-8', cwd: ROOT_DIR });
+  execSync('git push', { encoding: 'utf-8', cwd: ROOT_DIR });
   console.log('变更已提交并推送');
 }
 
