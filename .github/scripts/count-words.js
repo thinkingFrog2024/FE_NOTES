@@ -2,17 +2,15 @@
 
 import { execSync } from 'child_process';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 
-// 获取仓库根目录（脚本可能在子目录运行）
-const ROOT_DIR = process.cwd().includes('.github/scripts')
-  ? join(process.cwd(), '../..')
-  : process.cwd();
-
+// 获取仓库根目录
+const ROOT_DIR = resolve(process.cwd(), process.cwd().includes('.github/scripts') ? '../..' : '.');
 const STATS_PATH = join(ROOT_DIR, 'STATS.md');
 
 async function main() {
   console.log('开始统计文件字数...');
+  console.log(`根目录: ${ROOT_DIR}`);
 
   try {
     // 获取所有 Markdown 文件
@@ -20,15 +18,23 @@ async function main() {
     console.log(`共有 ${allFiles.length} 个 Markdown 文件`);
 
     // 统计每个文件的字数
-    const stats = allFiles.map(file => {
+    const stats = [];
+    for (const file of allFiles) {
       try {
-        const content = readFileSync(join(ROOT_DIR, file), 'utf-8');
-        const wordCount = countWords(content);
-        return { file, wordCount };
-      } catch {
-        return { file, wordCount: 0 };
+        const fullPath = join(ROOT_DIR, file);
+        if (existsSync(fullPath)) {
+          const content = readFileSync(fullPath, 'utf-8');
+          const wordCount = countWords(content);
+          stats.push({ file, wordCount });
+        } else {
+          console.log(`文件不存在: ${file}`);
+          stats.push({ file, wordCount: 0 });
+        }
+      } catch (e) {
+        console.log(`读取失败: ${file} - ${e.message}`);
+        stats.push({ file, wordCount: 0 });
       }
-    });
+    }
 
     // 按字数排序
     stats.sort((a, b) => b.wordCount - a.wordCount);
@@ -42,42 +48,58 @@ async function main() {
     writeFileSync(STATS_PATH, report, 'utf-8');
     console.log('STATS.md 已生成');
 
-    // 提交变更
-    commitChanges();
-
   } catch (error) {
     console.error('统计失败:', error.message);
     process.exit(1);
   }
 }
 
-// 获取所有 Markdown 文件（使用根目录）
+// 解码 git 转义的路径名（八进制转义序列）
+function decodeGitPath(path) {
+  // git 使用八进制转义，如 \346\230\代表中文
+  return path.replace(/\\([0-7]{3})/g, (match, octal) => {
+    return String.fromCharCode(parseInt(octal, 8));
+  });
+}
+
+// 获取所有 Markdown 文件
 function getAllMdFiles() {
-  const output = execSync('git ls-files "*.md"', { encoding: 'utf-8', cwd: ROOT_DIR });
-  return output.trim().split('\n').filter(f =>
-    f &&
-    !f.includes('.github') &&
-    !f.includes('.claude') &&
-    !f.includes('.trae')
-  );
+  // 使用 -z 选项避免路径转义，或者手动解码
+  try {
+    const output = execSync('git ls-files "*.md"', { encoding: 'utf-8', cwd: ROOT_DIR });
+    const files = output.trim().split('\n').map(f => decodeGitPath(f)).filter(f =>
+      f &&
+      !f.includes('.github') &&
+      !f.includes('.claude') &&
+      !f.includes('.trae')
+    );
+    return files;
+  } catch (e) {
+    console.log('git ls-files 失败:', e.message);
+    return [];
+  }
 }
 
 // 统计字数（中文按字符，英文按单词）
 function countWords(content) {
-  // 移除代码块（不计入字数）
+  // 移除代码块和不需要统计的内容
   const textOnly = content
-    .replace(/```[\s\S]*?```/g, '')  // 移除代码块
-    .replace(/`[^`]*`/g, '')          // 移除内联代码
-    .replace(/!\[.*?\]\(.*?\)/g, '')  // 移除图片链接
-    .replace(/\[.*?\]\(.*?\)/g, '')   // 移除链接（保留显示文本）
-    .replace(/<[^>]*>/g, '')          // 移除 HTML 标签
-    .replace(/^---[\s\S]*?---/g, '')  // 移除 YAML frontmatter
-    .replace(/#\s+/g, '')             // 移除标题标记
-    .replace(/[-*_]{3,}/g, '')        // 移除分隔线
-    .replace(/^\s*[-*+]\s+/gm, '')    // 移除列表标记
-    .replace(/\s+/g, ' ');            // 合并空白
+    .replace(/```[\s\S]*?```/g, '')      // 移除代码块
+    .replace(/`[^`]*`/g, '')              // 移除内联代码
+    .replace(/!\[.*?\]\(.*?\)/g, '')      // 移除图片
+    .replace(/#{1,6}\s+/g, '')            // 移除标题标记
+    .replace(/[-*_]{3,}/g, '')            // 移除分隔线
+    .replace(/^\s*[-*+]\s+/gm, '')        // 移除列表标记
+    .replace(/^\s*\d+\.\s+/gm, '')        // 移除有序列表
+    .replace(/\[.*?\]\(.*?\)/g, '$1')     // 链接保留显示文本
+    .replace(/<[^>]*>/g, '')              // 移除 HTML 标签
+    .replace(/^---[\s\S]*?---/gm, '')     // 移除 YAML frontmatter
+    .replace(/\s+/g, ' ')                 // 合并空白
+    .trim();
 
-  // 统计中文字符
+  if (!textOnly) return 0;
+
+  // 统计中文字符（常用汉字范围）
   const chineseChars = (textOnly.match(/[一-龥]/g) || []).length;
 
   // 统计英文单词
@@ -91,7 +113,18 @@ function countWords(content) {
 
 // 生成统计报告
 function generateReport(stats, totalWords) {
-  const now = new Date().toISOString().slice(0, 10);
+  const now = new Date().toLocaleDateString('zh-CN');
+
+  // 按目录分组
+  const dirStats = {};
+  stats.forEach(s => {
+    const dir = s.file.split('/')[0] || '根目录';
+    if (!dirStats[dir]) {
+      dirStats[dir] = { files: 0, words: 0 };
+    }
+    dirStats[dir].files++;
+    dirStats[dir].words += s.wordCount;
+  });
 
   let report = `# 笔记字数统计
 
@@ -109,35 +142,9 @@ function generateReport(stats, totalWords) {
 
 ---
 
-## 📝 详细统计
-
-| 文件 | 字数 |
-|------|------:|
-`;
-
-  stats.forEach(s => {
-    report += `| ${s.file} | ${s.wordCount.toLocaleString()} |\n`;
-  });
-
-  report += `
----
-
 ## 📈 按目录统计
 
-`;
-
-  // 按目录分组统计
-  const dirStats = {};
-  stats.forEach(s => {
-    const dir = s.file.split('/')[0] || '根目录';
-    if (!dirStats[dir]) {
-      dirStats[dir] = { files: 0, words: 0 };
-    }
-    dirStats[dir].files++;
-    dirStats[dir].words += s.wordCount;
-  });
-
-  report += `| 目录 | 文件数 | 字数 | 占比 |
+| 目录 | 文件数 | 字数 | 占比 |
 |------|:------:|------:|------:|
 `;
 
@@ -151,27 +158,42 @@ function generateReport(stats, totalWords) {
   report += `
 ---
 
+## 📝 详细统计（按字数排序）
+
+| 文件 | 字数 |
+|------|------:|
+`;
+
+  stats.forEach(s => {
+    if (s.wordCount > 0) {
+      report += `| ${s.file} | ${s.wordCount.toLocaleString()} |\n`;
+    }
+  });
+
+  // 显示字数为 0 的文件（可能有问题）
+  const zeroFiles = stats.filter(s => s.wordCount === 0);
+  if (zeroFiles.length > 0 && zeroFiles.length < stats.length) {
+    report += `
+---
+
+## ⚠️ 未能统计的文件 (${zeroFiles.length} 个)
+
+`;
+    zeroFiles.slice(0, 20).forEach(s => {
+      report += `- ${s.file}\n`;
+    });
+    if (zeroFiles.length > 20) {
+      report += `- ... 还有 ${zeroFiles.length - 20} 个文件\n`;
+    }
+  }
+
+  report += `
+---
+
 > 自动生成: Claude Code 字数统计器
 `;
 
   return report;
-}
-
-// 提交变更
-function commitChanges() {
-  // 切换到根目录执行 git 操作
-  execSync(`git config user.name "github-actions[bot]"`, { encoding: 'utf-8', cwd: ROOT_DIR });
-  execSync(`git config user.email "github-actions[bot]@users.noreply.github.com"`, { encoding: 'utf-8', cwd: ROOT_DIR });
-  execSync(`git add STATS.md`, { encoding: 'utf-8', cwd: ROOT_DIR });
-
-  // 检查是否有变更
-  const status = execSync('git status --porcelain', { encoding: 'utf-8', cwd: ROOT_DIR });
-  if (status.includes('STATS.md')) {
-    execSync(`git commit -m "Update STATS.md with word count statistics"`, { encoding: 'utf-8', cwd: ROOT_DIR });
-    console.log('统计报告已提交');
-  } else {
-    console.log('无变更，跳过提交');
-  }
 }
 
 main();
