@@ -193,6 +193,1136 @@ function App() {
 */
 ```
 
+#### 1.2.4 工作循环（Work Loop）深度解析
+
+Fiber 的核心是**可中断的工作循环**，这是 React 实现并发渲染的基石。
+
+**工作循环的本质 —— 深度优先遍历的可中断版本：**
+
+```javascript
+// React 源码中的核心工作循环
+function workLoopConcurrent() {
+  while (workInProgress !== null && !shouldYieldToHost()) {
+    // performUnitOfWork 处理单个 Fiber 节点
+    workInProgress = performUnitOfWork(workInProgress);
+  }
+}
+
+// 同步模式下的工作循环（不可中断）
+function workLoopSync() {
+  while (workInProgress !== null) {
+    workInProgress = performUnitOfWork(workInProgress);
+  }
+}
+```
+
+**performUnitOfWork 的两阶段处理 —— beginWork 与 completeWork：**
+
+```javascript
+function performUnitOfWork(unitOfWork) {
+  const current = unitOfWork.alternate;
+
+  // ========== 阶段一：beginWork（向下遍历） ==========
+  // 根据组件类型调用不同的处理函数
+  let next = beginWork(current, unitOfWork, renderLanes);
+
+  unitOfWork.memoizedProps = unitOfWork.pendingProps;
+  if (next === null) {
+    // 如果没有子节点，进入完成阶段
+    next = completeUnitOfWork(unitOfWork);
+  }
+
+  return next;
+}
+
+// completeUnitOfWork：向上回溯，完成当前节点及其兄弟/父节点
+function completeUnitOfWork(unitOfWork) {
+  let completedWork = unitOfWork;
+  do {
+    const current = completedWork.alternate;
+    const returnFiber = completedWork.return;
+
+    // ========== 阶段二：completeWork（节点完成） ==========
+    // 根据 tag 类型执行不同的完成逻辑
+    completeWork(current, completedWork, renderLanes);
+
+    // 收集副作用到 effectList
+    if (returnFiber !== null && (returnFiber.flags & ChildDeletion) === NoFlags) {
+      if ((completedWork.flags & Deletion) !== NoFlags) {
+        returnFiber.flags |= Deletion | ChildDeletion;
+      }
+      if ((completedWork.flags & Placement) !== NoFlags) {
+        if (returnFiber.flags & Placement) {
+          // 父节点已经有Placement标记，不需要重复标记
+        } else {
+          returnFiber.flags |= Placement;
+        }
+      }
+
+      // 将当前节点的副作用链表挂载到父节点的 effectList 上
+      if (completedWork.effectTagList !== null) {
+        if (returnFiber.lastEffect === null) {
+          returnFiber.firstEffect = completedWork.firstEffect;
+          returnFiber.lastEffect = completedWork.lastEffect;
+        } else {
+          returnFiber.lastEffect.nextEffect = completedWork.firstEffect;
+          returnFiber.lastEffect = completedWork.lastEffect;
+        }
+      }
+
+      // 处理自身的 effect
+      if (completedWork.flags & (Placement | Update)) {
+        if (returnFiber.lastEffect === null) {
+          returnFiber.firstEffect = completedWork;
+          returnFiber.lastEffect = completedWork;
+        } else {
+          returnFiber.lastEffect.nextEffect = completedWork;
+          returnFiber.lastEffect = completedWork;
+        }
+        completedWork.nextEffect = null;
+      }
+    }
+
+    const siblingFiber = completedWork.sibling;
+    if (siblingFiber !== null) {
+      // 有兄弟节点，返回兄弟继续处理
+      workInProgress = siblingFiber;
+      return siblingFiber;
+    }
+    // 没有兄弟了，回到父节点
+    completedWork = returnFiber;
+    workInProgress = completedWork;
+  } while (completedWork !== null);
+
+  // 返回null表示整棵树处理完毕
+  return null;
+}
+```
+
+**beginWork 内部 —— 根据组件类型分发：**
+
+```javascript
+function beginWork(current, workInProgress, renderLanes) {
+  // 1. 检查是否可以复用（bailout优化）
+  if (current !== null) {
+    const oldProps = current.memoizedProps;
+    const newProps = workInProgress.pendingProps;
+
+    if (
+      oldProps === newProps &&
+      !hasLegacyContextChanged() &&
+      (updateQueue === null || updateQueue.baseState === null)
+    ) {
+      // props和context都没变，尝试bailout
+      return bailoutOnAlreadyFinishedWork(current, workInProgress, renderLanes);
+    }
+  }
+
+  // 2. 根据 tag 分发到不同的更新逻辑
+  switch (workInProgress.tag) {
+    case FunctionComponent: {
+      return updateFunctionComponent(
+        current,
+        workInProgress,
+        SortedLanes,
+        renderLanes
+      );
+    }
+    case ClassComponent: {
+      return updateClassComponent(
+        current,
+        workInProgress,
+        SortedLanes,
+        renderLanes
+      );
+    }
+    case HostRoot:
+      return updateHostRoot(current, workInProgress, renderLanes);
+    case HostComponent:
+      return updateHostComponent(current, workInProgress, renderLanes);
+    case HostText:
+      return updateHostText(current, workInProgress);
+    case Fragment:
+      return updateFragment(current, workInProgress);
+    // ... 更多类型
+    default:
+      throw new Error('Unknown unit of work tag');
+  }
+}
+```
+
+**Bailout 优化 —— 跳过无需更新的子树：**
+
+```javascript
+function bailoutOnAlreadyFinishedWork(current, workInProgress, lanes) {
+  // 关键优化：检查子树是否有待处理的更新
+  if (!includesSomeLane(renderLanes, workInProgress.childLanes)) {
+    // 子树完全没有需要处理的更新，直接复用
+    if (current !== null) {
+      workInProgress.child = current.child;
+      workInProgress.memoizedProps = current.memoizedProps;
+      workInProgress.memoizedState = current.memoizedState;
+      workInProgress.updateQueue = current.updateQueue;
+      workInProgress.dependencies = current.dependencies;
+    }
+    // 返回null，跳过整个子树
+    return null;
+  }
+
+  // 子树有部分更新需要处理，克隆子节点但保留引用
+  cloneChildFibers(current, workInProgress);
+  return workInProgress.child;
+}
+```
+
+**遍历过程的可视化：**
+
+```
+以如下组件树为例：
+        App
+       / | \
+     A   B   C
+         / \
+        D   E
+
+工作循环的遍历顺序（深度优先）：
+1. beginWork(App) → 进入App
+2. beginWork(A)   → 进入A
+3. completeWork(A) → A无子节点，完成A
+4. beginWork(B)   → 进入B（A的兄弟）
+5. beginWork(D)   → 进入D（B的子节点）
+6. completeWork(D) → D无子节点，完成D
+7. beginWork(E)   → 进入E（D的兄弟）
+8. completeWork(E) → E无子节点，完成E
+9. completeWork(B) → B的所有子节点完成，完成B
+10. beginWork(C)   → 进入C（B的兄弟）
+11. completeWork(C) → C无子节点，完成C
+12. completeWork(App) → App的所有子节点完成，完成App
+13. 整棵树构建完毕！
+```
+
+#### 1.2.5 副作用系统（Side Effects / Effect）详解
+
+Fiber 的副作用系统是实现高效 DOM 更新的核心机制。每个 Fiber 节点通过 `flags`（原 `effectTag`）来标记需要执行的副作用操作。
+
+**副作用标记位（Flags）的定义：**
+
+```javascript
+// 副作用类型标记（使用位运算，支持组合）
+export const NoFlags = 0b000000000000000000000;              // 无副作用
+
+// 副作用标记
+export const Placement = 0b000000000000000000010;            // 插入DOM
+export const Update = 0b000000000000000000100;               // 更新属性
+export const Deletion = 0b000000000000000001000;             // 删除节点
+export const ChildDeletion = 0b000000000000000010000;        // 删除子节点
+
+export const Passive = 0b000000000000001000000;               // useEffect
+export const Ref = 0b000000000000010000000;                  // ref变更
+export const Snapshot = 0b000000000000100000000;              // 快照（getSnapshotBeforeUpdate）
+export const Callback = 0b000000000001000000000;              // componentDidUpdate回调
+export const LayoutMask = Snapshot | Callback;                // Layout阶段effect
+
+// 生命周期相关
+export const MountPassiveDevtools = 0b000000010000000000000;
+export const UnmountPassiveDevtools = 0b000000100000000000000;
+export const PassiveMask = MountPassiveDevtools | UnmountPassiveDevtools;
+
+// hydration相关
+export const Hydrating = 0b000001000000000000000;
+export const HydratingAndUpdate = Hydrating | Update;
+```
+
+**Effect List 的链表结构：**
+
+```javascript
+// Fiber节点上的effect相关字段
+class FiberNode {
+  // 当前节点的副作用标记
+  flags = NoFlags;
+
+  // 子树的副作用标记（用于快速判断是否需要遍历子树）
+  subtreeFlags = NoFlags;
+
+  // 副作用链表指针
+  firstEffect = null;   // 指向第一个有副作用的子节点
+  lastEffect = null;    // 指向最后一个有副作用的子节点
+  nextEffect = null;    // 指向下一个有副作用的节点（单向链表）
+
+  // 删除的子节点（单独维护，因为删除的节点不在新树上）
+  deletions = null;
+}
+```
+
+**Effect List 的构建过程：**
+
+```javascript
+// 在completeUnitOfWork中构建effect list
+function appendAllChildren(parent, workInProgress) {
+  let node = workInProgress.child;
+  while (node !== null) {
+    if (node.tag === HostComponent || node.tag === HostText) {
+      appendAllChildrenToContainer(parent, node);
+    } else if (node.child !== null) {
+      node.child.return = node;
+      node = node.child;
+      continue;
+    }
+
+    if (node === workInProgress) {
+      return;
+    }
+
+    while (node.sibling === null) {
+      if (node.return === null || node.return === workInProgress) {
+        return;
+      }
+      node = node.return;
+    }
+    node.sibling.return = node.return;
+    node = node.sibling;
+  }
+}
+```
+
+**Commit 阶段的副作用处理：**
+
+```javascript
+function commitRoot(root) {
+  const { finishedWork } = root;
+  
+  if ((finishedWork.flags & Marked) === NoFlags) {
+    // 没有任何副作用需要处理
+    commitBeforeMutationEffects_begin();
+    
+    // ========== 第一阶段：Before Mutation ==========
+    // DOM变更前执行（getSnapshotBeforeUpdate、useLayoutEffect清理等）
+    commitBeforeMutationEffects(finishedWork);
+    
+    // ========== 第二阶段：Mutation（真正的DOM操作）==========
+    // 这个阶段会实际修改DOM
+    commitMutationEffects(finishedWork);
+    
+    // 切换current指针（双缓存切换的关键时刻！）
+    root.current = finishedWork;
+    
+    // ========== 第三阶段：Layout（DOM变更后）==========
+    // 可以安全地读取DOM布局信息
+    commitLayoutEffects(finishedWork);
+  }
+
+  // 重置状态
+  root.current.finishedWork = null;
+}
+
+// Mutation阶段的详细实现
+function commitMutationEffects_begin(root) {
+  while (nextEffect !== null) {
+    const flags = nextEffect.flags;
+
+    // 处理删除
+    if (flags & ContentReset) {
+      commitResetTextContent(nextEffect);
+    }
+    if (flags & Ref) {
+      markRef(nextEffect);
+    }
+    if (flags & Deletion) {
+      const prevSibling = nextEffect.sibling;
+      const nextSibling = nextEffect.nextEffect;
+      // 执行删除操作
+      commitDeletion(root, nextEffect, nearestMountedAncestor);
+      nextEffect = prevSibling || nextSibling;
+      continue;
+    }
+
+    // 处理插入/移动
+    const isParent = (flags & Placement) !== NoFlags;
+    const isContentReset = (flags & ContentReset) !== NoFlags;
+    const isCallback = (flags & Callback) !== NoFlags;
+
+    if (isParent || isContentReset || isCallback) {
+      // 执行实际的DOM操作
+      commitReconciliationEffects(nextEffect);
+    }
+
+    // 处理更新
+    if (flags & Update) {
+      const current = nextEffect.alternate;
+      commitWork(current, nextEffect);
+    }
+
+    nextEffect = nextEffect.nextEffect;
+  }
+}
+```
+
+**不同类型副作用的处理示例：**
+
+```javascript
+// Placement（插入）的处理
+function commitPlacement(finishedWork) {
+  // 1. 获取父级DOM节点
+  const parentFiber = getHostParentFiber(finishedWork);
+  const parentStateNode = parentFiber.stateNode;
+
+  // 2. 获取兄弟DOM节点（用于insertBefore定位）
+  const before = getHostSibling(finishedWork);
+
+  // 3. 根据节点类型执行不同的插入逻辑
+  if (isHostParent(finishedWork)) {
+    // 原生DOM节点：直接插入
+    insertOrAppendPlacementNodeIntoContainer(
+      finishedWork,
+      before,
+      parent
+    );
+  } else {
+    // 组件节点：递归找到真实的DOM节点并插入
+    insertOrAppendPlacementNode(
+      finishedWork,
+      before,
+      parent
+    );
+  }
+}
+
+// Update（更新）的处理
+function commitWork(current, finishedWork) {
+  switch (finishedWork.tag) {
+    case FunctionComponent:
+    case ForwardRef:
+    case SimpleMemoComponent: {
+      // 处理useEffect
+      commitHookEffectListUnmount(
+        flags | HookHasEffect,
+        finishedWork
+      );
+      break;
+    }
+    case HostComponent: {
+      const instance = finishedWork.stateNode;
+      if (instance != null) {
+        const newProps = finishedWork.memoizedProps;
+        const oldProps = current !== null ? current.memoizedProps : newProps;
+        const type = finishedWork.type;
+        const updatePayload = finishedWork.updateQueue;
+
+        // 应用属性差异到真实DOM
+        finishedWork.updateQueue = null;
+        if (updatePayload !== null) {
+          commitUpdate(
+            instance,
+            updatePayload,
+            type,
+            oldProps,
+            newProps,
+            finishedWork
+          );
+        }
+      }
+      break;
+    }
+    case HostText: {
+      const textInstance = finishedWork.stateNode;
+      const newText = finishedWork.memoizedProps;
+      const oldText = current !== null ? current.memoizedProps : newText;
+      // 更新文本内容
+      commitTextUpdate(textInstance, oldText, newText);
+      break;
+    }
+  }
+}
+
+// Deletion（删除）的处理
+function commitDeletion(finishedWork, nearestMountedAncestor) {
+  // 递归卸载组件（触发componentWillUnmount、清理effects等）
+  unmountHostComponents(finishedWork);
+
+  // 从DOM中移除
+  const parent = getHostParentFiber(finishedWork);
+  removeChild(parent.stateNode, finishedWork.stateNode);
+}
+```
+
+#### 1.2.6 调度器与时间切片原理
+
+React 的调度器（Scheduler）是一个独立于 React Core 的包，负责管理任务的优先级调度和时间切片。
+
+**Scheduler 的核心数据结构：**
+
+```javascript
+// 任务队列：使用最小堆（Min-Heap）实现优先级队列
+var taskQueue = [];
+var timerQueue = [];
+
+// 任务对象结构
+var newTask = {
+  id: taskIdCounter++,           // 唯一ID
+  callback,                      // 要执行的回调函数
+  priorityLevel,                 // 优先级等级
+  startTime,                     // 计划开始时间
+  expirationTime,                // 过期时间
+  sortIndex: expirationTime,     // 排序依据（默认按过期时间）
+};
+
+// 优先级等级定义（从高到低）
+var ImmediatePriority = 1;       // 同步任务，不可中断
+var UserBlockingPriority = 2;    // 用户阻塞任务（点击、输入）
+var NormalPriority = 3;          // 正常优先级
+var LowPriority = 4;             // 低优先级
+var IdlePriority = 5;            // 空闲时执行
+```
+
+**调度器的核心流程：**
+
+```javascript
+function requestHostCallback(callback) {
+  scheduledHostCallback = callback;
+  if (!isMessageLoopRunning) {
+    isMessageLoopRunning = true;
+    port.postMessage(null);  // 通过MessageChannel触发宏任务
+  }
+}
+
+port.onmessage = function () {
+  if (scheduledHostCallback !== null) {
+    var currentTime = getCurrentTime();
+    // 计算本帧的截止时间（deadline）
+    startTime = currentTime;
+    deadline = currentTime + yieldInterval;  // 默认5ms
+    
+    var hasMoreWork = true;
+    try {
+      // 执行任务，直到时间片用完或没有更多任务
+      hasMoreWork = scheduledHostCallback(startTime, currentTime);
+    } finally {
+      if (hasMoreWork) {
+        // 还有任务，下一帧继续
+        port.postMessage(null);
+      } else {
+        isMessageLoopRunning = false;
+        scheduledHostCallback = null;
+      }
+    }
+  }
+};
+```
+
+**时间切片的实现细节：**
+
+```javascript
+// shouldYieldToHost：判断是否应该让出主线程
+function shouldYieldToHost() {
+  const timeElapsed = getCurrentTime() - startTime;
+
+  if (timeElapsed < yieldInterval) {
+    // 时间片还没用完
+    return false;
+  }
+
+  // 检查是否有更高优先级的任务需要处理
+  if (needsPainting()) {
+    // 浏览器需要绘制，让出控制权
+    return true;
+  }
+
+  // 检查是否有输入事件等待处理
+  if (hasInputEvent()) {
+    return true;
+  }
+
+  // 时间片用完
+  return timeElapsed >= yieldInterval;
+}
+
+// 动态调整时间切片长度
+let yieldInterval = 5;  // 默认5ms
+
+function forceFrameRate(fps) {
+  if (fps < 0 || fps > 125) {
+    console.warn('forceFrameRate takes a positive int between 0 and 125');
+    return;
+  }
+  if (fps > 0) {
+    yieldInterval = Math.floor(1000 / fps);
+  } else {
+    yieldInterval = 5;  // reset
+  }
+}
+```
+
+**MessageChannel vs requestAnimationFrame vs setTimeout：**
+
+```javascript
+// React选择MessageChannel的原因：
+
+// 方案1：setTimeout(fn, 0)
+// 问题：Chrome中最小延迟4ms，精度不够；会被节流
+setTimeout(callback, 0);  // 实际延迟约4-5ms
+
+// 方案2：requestAnimationFrame
+// 问题：只在浏览器重绘前触发，如果浏览器标签页不活跃就不会执行
+requestAnimationFrame(callback);
+
+// 方案3：MessageChannel ✅（React的选择）
+// 优势：
+// - 精度高，可以立即触发
+// - 是宏任务，不会阻塞渲染
+// - 在不活跃标签页也能正常工作
+const channel = new MessageChannel();
+const port = channel.port2;
+channel.port1.onmessage = function () {
+  // 这里执行调度回调
+  performWorkUntilDeadline();
+};
+
+// 触发调度
+function schedulePerformWorkUntilDeadline() {
+  port.postMessage(null);
+}
+```
+
+**任务调度的完整生命周期：**
+
+```javascript
+// 1. 创建调度任务
+function scheduleCallback(priorityLevel, callback, options) {
+  const currentTime = getCurrentTime();
+
+  var startTime;
+  if (typeof options === 'object' && options !== null) {
+    var delay = options.delay;
+    if (typeof delay === 'number' && delay > 0) {
+      startTime = currentTime + delay;
+    } else {
+      startTime = currentTime;
+    }
+  } else {
+    startTime = currentTime;
+  }
+
+  var timeout;
+  switch (priorityLevel) {
+    case ImmediatePriority:
+      timeout = IMMEDIATE_PRIORITY_TIMEOUT;  // -1（立即过期）
+      break;
+    case UserBlockingPriority:
+      timeout = USER_BLOCKING_PRIORITY_TIMEOUT;  // 250ms
+      break;
+    case IdlePriority:
+      timeout = IDLE_PRIORITY_TIMEOUT;  // 永不过期
+      break;
+    case LowPriority:
+      timeout = LOW_PRIORITY_TIMEOUT;  // 10000ms
+      break;
+    case NormalPriority:
+    default:
+      timeout = NORMAL_PRIORITY_TIMEOUT;  // 5000ms;
+      break;
+  }
+
+  var expirationTime = startTime + timeout;
+
+  var newTask = {
+    id: taskIdCounter++,
+    callback,
+    priorityLevel,
+    startTime,
+    expirationTime,
+    sortIndex: -1,
+  };
+
+  if (startTime > currentTime) {
+    // 延迟任务：放入timerQueue
+    newTask.sortIndex = startTime;
+    push(timerQueue, newTask);
+    if (peek(taskQueue) === null && newTask === peek(timerQueue)) {
+      // 这是timerQueue中最早的任务，设置定时器
+      if (isHostTimeoutScheduled === null) {
+        isHostTimeoutScheduled = true;
+        // 使用setTimeout设置延迟执行
+        requestHostTimeout(handleTimeout, startTime - currentTime);
+      }
+    }
+  } else {
+    // 即时任务：放入taskQueue
+    newTask.sortIndex = expirationTime;
+    push(taskQueue, newTask);
+    // 开始调度
+    if (!isHostCallbackScheduled && !isPerformingWork) {
+      isHostCallbackScheduled = true;
+      requestHostCallback(flushWork);
+    }
+  }
+
+  return newTask;
+}
+
+// 2. 刷新任务队列
+function flushWork(initialTime) {
+  isHostCallbackScheduled = false;
+  isPerformingWork = true;
+
+  try {
+    // 将timerQueue中到期的任务移入taskQueue
+    advanceTimers(initialTime);
+    return flushWorkHelper(initialTime);
+  } finally {
+    isPerformingWork = false;
+    // 检查是否还有剩余任务
+    if (scheduleHostCallbackIfNeeded !== null) {
+      scheduleHostCallbackIfNeeded = true;
+      requestHostCallback(flushWork);
+    } else {
+      // 所有任务完成
+      const remainingTime = getTimeRemaining();
+      if (remainingTime <= 0) {
+        // 时间已到，可能还有timerQueue中的任务
+        advanceTimers(getCurrentTime());
+      }
+    }
+  }
+}
+
+// 3. 实际执行任务的辅助函数
+function flushWorkHelper(initialTime) {
+  currentTime = initialTime;
+
+  let currentTask = peek(taskQueue);
+  while (currentTask !== null) {
+    if (currentTask.expirationTime > currentTime && shouldYieldToHost()) {
+      // 任务还没过期且时间片用完，中断执行
+      break;
+    }
+
+    const callback = currentTask.callback;
+    if (callback !== null) {
+      currentTask.callback = null;
+      currentPriorityLevel = currentTask.priorityLevel;
+      
+      // 执行回调
+      const continuationCallback = callback(currentTask.expirationTime);
+      
+      if (typeof continuationCallback === 'function') {
+        // 任务返回了一个函数（说明任务还没完成），放回队列
+        currentTask.callback = continuationCallback;
+      } else {
+        // 任务已完成，从队列移除
+        pop(taskQueue);
+      }
+    } else {
+      pop(taskQueue);
+    }
+    
+    currentTask = peek(taskQueue);
+  }
+
+  // 返回是否还有未完成的任务
+  return currentTask !== null;
+}
+```
+
+#### 1.2.7 更新队列与状态管理机制
+
+每个 Fiber 节点都维护着一个更新队列（Update Queue），用于存储所有待处理的 state 更新。
+
+**Update 对象的数据结构：**
+
+```javascript
+const update = {
+  lane,                    // 优先级车道
+  action,                  // 更新动作（setState的参数）
+  eagerReducer: null,      // 优化的reducer（用于提前计算）
+  eagerState: null,        // 优化的state（用于提前计算）
+  next: null,              // 指向下一个update（环形链表）
+};
+```
+
+**Update Queue 的结构：**
+
+```javascript
+// 单向环形链表结构
+class UpdateQueue {
+  baseState = null;           // 基础状态（上次计算的结果）
+  firstBaseUpdate = null;     // 第一个基础更新
+  lastBaseUpdate = null;      // 最后一个基础更新
+  shared = {
+    pending: null,            // 待处理的更新（来自多个setState调用）
+  };
+  fibers = null;              // 关联的fiber列表
+}
+```
+
+**更新入队的过程：**
+
+```javascript
+function dispatchSetState(fiber, queue, action) {
+  // 1. 获取当前更新的优先级lane
+  const lane = requestUpdateLane(fiber);
+
+  // 2. 创建update对象
+  const update = {
+    lane,
+    action,
+    eagerReducer: null,
+    eagerState: null,
+    next: null,
+  };
+
+  // 3. 入队（追加到环形链表尾部）
+  if (queue.pending === null) {
+    // 第一个update，指向自己形成环
+    update.next = update;
+  } else {
+    update.next = queue.pending.next;
+    queue.pending.next = update;
+  }
+  queue.pending = update;
+
+  // 4. 优化：尝试提前计算eager state
+  const alternate = fiber.alternate;
+  if (
+    fiber.lanes === NoLanes &&
+    (alternate === null || alternate.lanes === NoLanes)
+  ) {
+    const lastRenderedReducer = queue.lastRenderedReducer;
+    if (lastRenderedReducer !== null) {
+      let prevEagerState;
+      if (queue.lastRenderedStateOverride !== null) {
+        prevEagerState = queue.lastRenderedStateOverride;
+      } else {
+        prevEagerState = queue.lastRenderedState;
+      }
+      const eagerState = lastRenderedReducer(action, prevEagerState);
+      update.eagerReducer = lastRenderedReducer;
+      update.eagerState = eagerState;
+      
+      if (Object.is(eagerState, prevEagerState)) {
+        // state没变，可以直接bailout
+        return;
+      }
+    }
+  }
+
+  // 5. 调度更新
+  const eventTime = requestEventTime();
+  const root = markUpdate(fiber);
+  scheduleUpdateOnFiber(fiber, lane, eventTime);
+}
+```
+
+**更新处理的完整流程：**
+
+```javascript
+function processUpdateQueue(workInProgress, props, instance, renderLanes) {
+  const queue = workInProgress.updateQueue;
+  let baseQueue = queue.baseQueue;
+  let pendingQueue = queue.shared.pending;
+
+  // 1. 合并pending updates到baseQueue
+  if (pendingQueue !== null) {
+    const pending = pendingQueue;
+    queue.shared.pending = null;
+
+    const lastPendingUpdate = pending;
+    const firstPendingUpdate = pending.next;
+
+    if (baseQueue !== null) {
+      const lastBaseUpdate = baseQueue.next;
+      lastBaseUpdate.next = firstPendingUpdate;
+      pending.next = lastBaseUpdate;
+    }
+
+    baseQueue = pending;
+    queue.baseQueue = baseQueue;
+  }
+
+  // 2. 处理baseQueue中的所有updates
+  if (baseQueue !== null) {
+    const first = baseQueue.next;
+    let newState = queue.baseState;
+    let newBaseState = null;
+    let newBaseQueueFirst = null;
+    let newBaseQueueLast = null;
+    let update = first;
+
+    do {
+      const updateLane = update.lane;
+      if (!isSubsetOfLanes(renderLanes, updateLane)) {
+        // 优先级不够，跳过这个update（保留到下次处理）
+        const clone = {
+          lane: updateLane,
+          action: update.action,
+          eagerReducer: update.eagerReducer,
+          eagerState: update.eagerState,
+          next: null,
+        };
+        if (newBaseQueueLast === null) {
+          newBaseQueueFirst = newBaseQueueLast = clone;
+          newBaseState = newState;
+        } else {
+          newBaseQueueLast = newBaseQueueLast.next = clone;
+        }
+      } else {
+        // 优先级足够，处理这个update
+        if (newBaseQueueLast !== null) {
+          const clone = {
+            lane: NoLane,
+            action: update.action,
+            eagerReducer: update.eagerReducer,
+            eagerState: update.eagerState,
+            next: null,
+          };
+          newBaseQueueLast = newBaseQueueLast.next = clone;
+        }
+
+        // 使用eager state优化
+        if (update.eagerReducer === lastRenderedReducer) {
+          newState = update.eagerState;
+        } else {
+          // 正常计算新state
+          action = update.action;
+          if (action instanceof Function) {
+            newState = action(newState);
+          } else {
+            newState = action;
+          }
+        }
+      }
+      update = update.next;
+    } while (update !== null && update !== first);
+
+    if (newBaseQueueLast === null) {
+      newBaseState = newState;
+    } else {
+      newBaseQueueLast.next = newBaseQueueFirst;
+    }
+
+    queue.baseState = newBaseState;
+    queue.baseQueue = newBaseQueueLast;
+    queue.lastRenderedState = newState;
+  }
+
+  return [newState, queue];
+}
+```
+
+**Hooks 状态与 Fiber 的关联：**
+
+```javascript
+// Hook的数据结构
+function Hook(memoizedState, baseState, baseQueue, queue, next) {
+  this.memoizedState = memoizedState;  // 最新的状态值
+  this.baseState = baseState;          // 基础状态
+  this.baseQueue = baseQueue;          // 基础更新队列
+  this.queue = queue;                  // 当前更新队列
+  this.next = next;                    // 下一个hook（链表结构）
+}
+
+// Fiber节点上存储hooks链表
+const fiber = {
+  memoizedState: hook1,  // 第一个hook
+};
+
+// hooks链表示例：useState + useEffect + useState
+/*
+  fiber.memoizedState → hook1(useState: count)
+                          ↓
+                        hook2(useEffect: effect)
+                          ↓
+                        hook3(useState: name)
+*/
+```
+
+#### 1.2.8 中断恢复与错误处理机制
+
+Fiber 架构的一个关键能力是**可中断性**——渲染过程可以被暂停并在之后恢复。
+
+**中断点的保存与恢复：**
+
+```javascript
+// 全局变量保存中断时的状态
+let workInProgress = null;       // 当前正在处理的Fiber
+let workInProgressRoot = null;   // 当前正在处理的根Fiber
+let workInProgressRootRenderLanes = NoLanes;  // 当前的渲染lanes
+let workInProgressRootExitStatus = RootIncomplete;  // 渲染退出状态
+let workInProgressRootFatalError = null;  // 致命错误
+let workInProgressRootSkippedLanes = NoLanes;  // 被跳过的lanes
+let workInProgressRootInterleavedUpdatedLanes = NoLanes;  // 交错更新的lanes
+let workInProgressRootPingedLanes = NoLanes;  // 被ping的lanes
+
+// 中断发生时
+function interruptWork() {
+  // 保存当前进度到root上
+  workInProgressRoot = workInProgress;
+  // workInProgress树已经包含了所有中间状态
+  // 下次恢复时直接从这里继续
+}
+
+// 恢复工作时
+function restoreWork(root, lanes) {
+  // 从之前中断的地方恢复
+  prepareFreshStack(root, lanes);
+  workLoopConcurrent();  // 继续工作循环
+}
+
+function prepareFreshStack(root, lanes) {
+  root.finishedWork = null;
+  root.finishedLanes = NoLanes;
+
+  // 克隆current树作为workInProgress树的起点
+  const workInProgress = createWorkInProgress(root.current, null);
+  root.workInProgress = workInProgress;
+  workInProgressRoot = root;
+  workInProgressRootRenderLanes = lanes;
+  workInProgressRootInterleavedUpdatedLanes = root.pendingLanes;
+  
+  return workInProgress;
+}
+```
+
+**错误边界的 Fiber 层面实现：**
+
+```javascript
+// 错误捕获机制
+function renderRootSync(root, lanes) {
+  let exitStatus = RootInProgress;
+
+  do {
+    try {
+      workLoopSync();
+      break;
+    } catch (thrownValue) {
+      handleError(root, thrownValue);  // 处理错误
+    }
+  } while (true);
+
+  return exitStatus;
+}
+
+function renderRootConcurrent(root, lanes) {
+  let exitStatus = RootInProgress;
+
+  do {
+    try {
+      workLoopConcurrent();
+      break;
+    } catch (thrownValue) {
+      handleError(root, thrownValue);
+    }
+  } while (true);
+
+  return exitStatus;
+}
+
+// 错误处理器
+function handleError(root, thrownValue) {
+  do {
+    try {
+      // 1. 向上查找最近的Error Boundary
+      const errorBoundary = findNearestErrorBoundary(workInProgress);
+      
+      if (errorBoundary !== null) {
+        // 2. 找到了Error Boundary
+        const errorInfo = createErrorInfo(thrownValue);
+        
+        // 3. 标记Error Boundary需要触发componentDidCatch
+        errorBoundary.flags |= ShouldCapture;
+        
+        // 4. 将错误信息附加到Error Boundary上
+        errorBoundary.captureError = {
+          value: thrownValue,
+          stack: errorInfo.componentStack,
+        };
+        
+        // 5. 跳过当前子树，直接complete Error Boundary
+        workInProgress = errorBoundary;
+        completeUnitOfWork(errorBoundary);
+        return;
+      }
+      
+      // 6. 没有找到Error Boundary，抛出到最顶层
+      throw thrownValue;
+    } catch (error) {
+      // 继续向上查找
+      thrownValue = error;
+      workInProgress = workInProgress.return;
+    }
+  } while (workInProgress !== null);
+}
+
+// 查找最近的Error Boundary
+function findNearestErrorBoundary(workInProgress) {
+  let node = workInProgress;
+  while (node !== null) {
+    const tag = node.tag;
+    
+    // ClassComponent 且实现了 getDerivedStateFromError 或 componentDidCatch
+    if (tag === ClassComponent) {
+      const prototype = node.type.prototype;
+      if (
+        typeof prototype.getDerivedStateFromError === 'function' ||
+        typeof prototype.componentDidCatch === 'function'
+      ) {
+        return node;
+      }
+    }
+    
+    node = node.return;
+  }
+  
+  return null;
+}
+```
+
+**高优先级更新打断低优先级更新的处理：**
+
+```javascript
+// 场景：用户在过渡更新过程中触发了点击事件
+function checkForForceUpdatePriority() {
+  // 检查是否有更高优先级的更新进入
+  const pendingLanes = workInProgressRoot.pendingLanes;
+  
+  if (pendingLanes !== NoLanes) {
+    const nextLanes = getNextLanes(pendingLanes, NoLanes);
+    const newCallbackPriority = getHighestPriorityLane(nextLanes);
+    const currentCallbackPriority = getHighestPriorityLane(workInProgressRootRenderLanes);
+    
+    if (newCallbackPriority < currentCallbackPriority) {
+      // 发现了更高优先级的更新！
+      // 放弃当前的渲染工作
+      workInProgressRootExitStatus = RootInProgress;
+      
+      // 标记哪些lanes已经完成了
+      const alreadyFinishedLanes = workInProgressRoot.renderedLanes;
+      workInProgressRootSkippedLanes |= alreadyFinishedLanes;
+      
+      // 重新调度，优先处理高优先级更新
+      ensureRootIsScheduled(root, currentTime);
+      return true;  // 表示被打断了
+    }
+  }
+  
+  return false;
+}
+
+// 被打断后的重新渲染
+function handleForceUpdate(root) {
+  // 之前的workInProgress作废
+  const finishedWork = root.finishedWork;
+  
+  if (finishedWork !== null) {
+    // 完成提交（如果有部分完成的话）
+    commitRoot(root);
+  }
+  
+  // 以最新的状态重新开始渲染
+  prepareFreshStack(root, root.pendingLanes);
+  workLoopConcurrent();
+}
+```
+
 ### 1.3 Reconciliation 协调算法
 
 #### 1.3.1 Diff算法的核心原则
