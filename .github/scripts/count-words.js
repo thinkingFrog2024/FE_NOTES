@@ -54,21 +54,14 @@ async function main() {
   }
 }
 
-// 解码 git 转义的路径名（八进制转义序列）
-function decodeGitPath(path) {
-  // git 使用八进制转义，如 \346\230\代表中文
-  return path.replace(/\\([0-7]{3})/g, (match, octal) => {
-    return String.fromCharCode(parseInt(octal, 8));
-  });
-}
-
-// 获取所有 Markdown 文件
+// 获取所有 Markdown 文件（使用 -z 避免路径转义）
 function getAllMdFiles() {
-  // 使用 -z 选项避免路径转义，或者手动解码
   try {
-    const output = execSync('git ls-files "*.md"', { encoding: 'utf-8', cwd: ROOT_DIR });
-    const files = output.trim().split('\n').map(f => decodeGitPath(f)).filter(f =>
+    // -z 用 null 字符分隔，不转义路径名
+    const output = execSync('git ls-files -z', { encoding: 'utf8', cwd: ROOT_DIR });
+    const files = output.split('\0').filter(f =>
       f &&
+      f.endsWith('.md') &&
       !f.includes('.github') &&
       !f.includes('.claude') &&
       !f.includes('.trae')
