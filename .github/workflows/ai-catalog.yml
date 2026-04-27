@@ -24,7 +24,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2  # 需要 fetch-depth >= 2 来获取 git diff
+          fetch-depth: 2
+          persist-credentials: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -42,4 +43,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git push
+          git add README.md
+          git diff --staged --quiet || git commit -m "Update README catalog"
+          git push origin HEAD
