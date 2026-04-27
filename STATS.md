@@ -8,9 +8,9 @@
 
 | 指标 | 数值 |
 |------|------|
-| 文件总数 | 57 个 |
-| 总字数 | 245,621 字 |
-| 平均字数 | 4,309 字/文件 |
+| 文件总数 | 58 个 |
+| 总字数 | 255,713 字 |
+| 平均字数 | 4,409 字/文件 |
 
 ---
 
@@ -18,16 +18,16 @@
 
 | 目录 | 文件数 | 字数 | 占比 |
 |------|:------:|------:|------:|
-| 工程化相关 | 13 | 73,846 | 30.1% |
-| vue | 2 | 50,792 | 20.7% |
-| JS CSS HTML | 13 | 48,266 | 19.7% |
-| JacaScript | 11 | 37,752 | 15.4% |
-| 网络和浏览器 | 5 | 14,565 | 5.9% |
-| AI | 3 | 11,835 | 4.8% |
-| code-react | 7 | 6,792 | 2.8% |
-| README.md | 1 | 792 | 0.3% |
+| 工程化相关 | 13 | 73,846 | 28.9% |
+| vue | 2 | 50,792 | 19.9% |
+| JS CSS HTML | 13 | 48,266 | 18.9% |
+| JacaScript | 12 | 47,085 | 18.4% |
+| 网络和浏览器 | 5 | 14,565 | 5.7% |
+| AI | 3 | 11,835 | 4.6% |
+| code-react | 7 | 7,150 | 2.8% |
+| README.md | 1 | 777 | 0.3% |
+| STATS.md | 1 | 752 | 0.3% |
 | CLAUDE.md | 1 | 645 | 0.3% |
-| STATS.md | 1 | 336 | 0.1% |
 
 ---
 
@@ -43,6 +43,7 @@
 | JacaScript/js.md | 12,132 |
 | 工程化相关/工程化面试.md | 11,347 |
 | AI/deep-researcher.md | 10,563 |
+| JacaScript/ts/1.md | 9,333 |
 | 工程化相关/04_Webpack_Engineering.md | 7,745 |
 | JS CSS HTML/ES6/04_集合与数据结构.md | 6,381 |
 | JacaScript/ES6/04_集合与数据结构.md | 6,381 |
@@ -58,7 +59,7 @@
 | 网络和浏览器/浏览器.md | 2,897 |
 | JS CSS HTML/ES6/02_数据类型.md | 2,806 |
 | JacaScript/ES6/02_数据类型.md | 2,806 |
-| code-react/01-核心原理.md | 2,396 |
+| code-react/01-核心原理.md | 2,754 |
 | JS CSS HTML/ES6/06_原型与类.md | 2,277 |
 | JacaScript/ES6/06_原型与类.md | 2,277 |
 | 工程化相关/04_Webpack_Engineering_Part2.md | 2,057 |
@@ -79,7 +80,8 @@
 | JacaScript/ES6/09_其他.md | 964 |
 | 工程化相关/03_Engineering_npm.md | 913 |
 | 工程化相关/05_Node_Practices.md | 875 |
-| README.md | 792 |
+| README.md | 777 |
+| STATS.md | 752 |
 | CLAUDE.md | 645 |
 | 工程化相关/02_Node_Backend.md | 536 |
 | 网络和浏览器/axios封装.md | 497 |
@@ -87,7 +89,6 @@
 | code-react/05-总结.md | 415 |
 | JS CSS HTML/ES6/01_基础语法.md | 385 |
 | JacaScript/ES6/01_基础语法.md | 385 |
-| STATS.md | 336 |
 | code-react/04-性能优化.md | 293 |
 | code-react/03-架构深层考量.md | 181 |
 | code-react/react原理.md | 48 |
