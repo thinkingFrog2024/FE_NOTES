@@ -118,6 +118,11 @@ Concurrent Mode (React 18)
 - **useEffect** → Effect 链表、依赖对比、清理函数
   - 🔗 关联: [07_异步编程](JS%20CSS%20HTML/ES6/07_异步编程.md) (微任务机制)
 
+#### TSX 与模板
+- [03 TSX 与模板编译原理](code-react/03-tsx.md) → JSX/TSX 编译过程、模板语法转换
+  - 🔗 关联: [JavaScript/ts/01_类型基础.md](JacaScript/ts/01_类型基础.md) (类型系统)
+  - 🔗 关联: [JavaScript/ts/03_泛型与高级类型.md](JacaScript/ts/03_泛型与高级类型.md) (类型推断)
+
 ---
 
 ## 🔧 前端工程化
@@ -250,6 +255,7 @@ Sub Agent (上下文隔离)
 - vue/vue面试.md：Vue 全栈面试题、源码解析
 - code-react/react原理.md：虚拟DOM、Fiber架构、Reconciliation、渲染流程
 - code-react/xiuyan-react.md：React 源码实践、手写实现
+- code-react/03-tsx.md：TSX 与模板编译原理、JSX 转换机制
 - 工程化相关/00_Frontend_Roadmap.md：前端学习全路线、技术栈概览
 - 工程化相关/01_Node_Basic.md：Node.js 基础、模块系统、异步 I/O
 - 工程化相关/01_Node_Deep_Dive.md：事件循环、Buffer、Stream、进程
@@ -267,6 +273,12 @@ Sub Agent (上下文隔离)
 - AI/核心概念.md：模型、智能体、MCP、RAG、Skill、Sub Agent
 - AI/context Engineering.md：上下文工程、提示词设计、系统提示
 - AI/deep-researcher.md：深度研究工具链、研究方法、知识管理
+- JacaScript/ts/01_类型基础.md：TypeScript 类型系统、基础类型、类型注解
+- JacaScript/ts/02_接口与类.md：接口定义、类实现、访问修饰符
+- JacaScript/ts/03_泛型与高级类型.md：泛型编程、条件类型、映射类型
+- JacaScript/ts/04_工程应用.md：项目配置、类型声明、工具集成
+- JS CSS HTML/css HTML 基础.md：CSS 选择器、盒模型、布局、动画
+- JS CSS HTML/js.md：JavaScript 基础语法、DOM 操作、事件处理
 
 ## 笔记覆盖知识面分析
 
@@ -274,9 +286,11 @@ Sub Agent (上下文隔离)
 
 - **前端框架**：Vue 3（深度）、React（原理深入）
 - **JavaScript**：ES6+ 全面覆盖，包括异步编程、高级特性
+- **TypeScript**：类型系统、泛型、工程化应用
 - **前端工程化**：Node.js、Webpack、npm 包管理
 - **网络与浏览器**：HTTP 协议、浏览器原理、事件循环
 - **AI 技术**：大模型应用、智能体、RAG 技术
+- **TSX 编译**：JSX/TSX 转换机制、模板编译原理
 
 ### 2. 知识深度评估
 
@@ -285,9 +299,11 @@ Sub Agent (上下文隔离)
 - React Fiber 架构、Hooks 实现、调度机制
 - Node.js 事件循环、异步 I/O、Stream 处理
 - 浏览器渲染流程、事件循环机制
+- TSX 编译原理、模板语法转换
 
 **中等深度**：
 - JavaScript 基础语法与特性
+- TypeScript 类型系统与工程应用
 - 前端工程化工具链
 - 网络协议与请求处理
 
@@ -295,11 +311,12 @@ Sub Agent (上下文隔离)
 - AI 技术应用（概念为主，实践较少）
 - 性能优化策略（分散在多个笔记中）
 - 跨端开发（未系统覆盖）
+- CSS 基础（仅有基础笔记，缺乏深入）
 
 ### 3. 建议补充的方向
 
 - **性能优化**：建立系统的性能优化专题，涵盖代码、网络、渲染等维度
-- **TypeScript**：增加 TypeScript 学习笔记，包括类型系统、工程化应用
+- **CSS 深入**：补充 Flexbox、Grid、动画、响应式设计等 CSS 高级特性
 - **跨端开发**：补充小程序、React Native、Electron 等跨端技术
 - **前端测试**：增加单元测试、E2E 测试、测试驱动开发
 - **可视化**：补充 D3.js、Canvas、SVG 等可视化技术
@@ -307,6 +324,7 @@ Sub Agent (上下文隔离)
 - **微前端**：补充微前端架构、模块联邦、沙箱机制
 - **Web 安全**：增加 XSS、CSRF、CSP 等安全防护知识
 - **前沿技术**：Web Components、渐进式 Web 应用、边缘计算
+- **状态管理**：深入各类状态管理库的原理与最佳实践
 
 > 最后更新: 2026-04-27
 > 自动生成: Claude Code AI 目录生成器
