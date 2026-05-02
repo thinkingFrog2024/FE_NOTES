@@ -235,5 +235,78 @@ Sub Agent (上下文隔离)
 
 ---
 
+## 文件目录
+
+- JS CSS HTML/ES6/01_基础语法.md：变量声明、解构赋值、运算符、严格模式
+- JS CSS HTML/ES6/02_数据类型.md：原始类型、包装器、数字/字符串处理、Symbol
+- JS CSS HTML/ES6/03_对象基础.md：对象创建、属性操作、原型链
+- JS CSS HTML/ES6/04_集合与数据结构.md：Set、Map、数组方法、数据结构实现
+- JS CSS HTML/ES6/05_函数.md：函数声明、闭包、高阶函数、函数式编程
+- JS CSS HTML/ES6/06_原型与类.md：原型链、类继承、静态方法、装饰器
+- JS CSS HTML/ES6/07_异步编程.md：Promise、Generator、async/await、事件循环
+- JS CSS HTML/ES6/08_高级特性.md：装饰器、代理、迭代器、反射
+- JS CSS HTML/ES6/09_其他.md：模块系统、错误处理、编码规范
+- vue/vue3学习大纲.md：Vue3 内置组件源码解析、响应式原理、编译优化
+- vue/vue面试.md：Vue 全栈面试题、源码解析
+- code-react/react原理.md：虚拟DOM、Fiber架构、Reconciliation、渲染流程
+- code-react/xiuyan-react.md：React 源码实践、手写实现
+- 工程化相关/00_Frontend_Roadmap.md：前端学习全路线、技术栈概览
+- 工程化相关/01_Node_Basic.md：Node.js 基础、模块系统、异步 I/O
+- 工程化相关/01_Node_Deep_Dive.md：事件循环、Buffer、Stream、进程
+- 工程化相关/02_Node_Backend.md：Node.js 服务端开发、API 设计
+- 工程化相关/03_Engineering_npm.md：包管理、npm 生态、发布流程
+- 工程化相关/04_Webpack_Engineering.md：模块打包、Loader/Plugin、优化配置
+- 工程化相关/05_Node_Practices.md：Node.js 实践案例、性能优化
+- 工程化相关/渲染方式.md：SPA、MPA、SSR、SSG 对比
+- 工程化相关/工程化面试.md：Node.js、Webpack、工程化实践
+- 网络和浏览器/浏览器.md：DNS、TCP、渲染流程、回流重绘、事件循环
+- 网络和浏览器/网络.md：网络协议、HTTP/HTTPS、WebSocket
+- 网络和浏览器/浏览器进程模型.md：浏览器多进程架构、渲染进程
+- 网络和浏览器/网络请求.md：HTTP 协议、请求方法、状态码
+- 网络和浏览器/axios封装.md：拦截器、错误处理、请求取消
+- AI/核心概念.md：模型、智能体、MCP、RAG、Skill、Sub Agent
+- AI/context Engineering.md：上下文工程、提示词设计、系统提示
+- AI/deep-researcher.md：深度研究工具链、研究方法、知识管理
+
+## 笔记覆盖知识面分析
+
+### 1. 已覆盖的技术栈
+
+- **前端框架**：Vue 3（深度）、React（原理深入）
+- **JavaScript**：ES6+ 全面覆盖，包括异步编程、高级特性
+- **前端工程化**：Node.js、Webpack、npm 包管理
+- **网络与浏览器**：HTTP 协议、浏览器原理、事件循环
+- **AI 技术**：大模型应用、智能体、RAG 技术
+
+### 2. 知识深度评估
+
+**深入领域**：
+- Vue 3 响应式原理、内置组件源码解析
+- React Fiber 架构、Hooks 实现、调度机制
+- Node.js 事件循环、异步 I/O、Stream 处理
+- 浏览器渲染流程、事件循环机制
+
+**中等深度**：
+- JavaScript 基础语法与特性
+- 前端工程化工具链
+- 网络协议与请求处理
+
+**浅显覆盖**：
+- AI 技术应用（概念为主，实践较少）
+- 性能优化策略（分散在多个笔记中）
+- 跨端开发（未系统覆盖）
+
+### 3. 建议补充的方向
+
+- **性能优化**：建立系统的性能优化专题，涵盖代码、网络、渲染等维度
+- **TypeScript**：增加 TypeScript 学习笔记，包括类型系统、工程化应用
+- **跨端开发**：补充小程序、React Native、Electron 等跨端技术
+- **前端测试**：增加单元测试、E2E 测试、测试驱动开发
+- **可视化**：补充 D3.js、Canvas、SVG 等可视化技术
+- **WebAssembly**：增加 Wasm 学习笔记，性能优化场景
+- **微前端**：补充微前端架构、模块联邦、沙箱机制
+- **Web 安全**：增加 XSS、CSRF、CSP 等安全防护知识
+- **前沿技术**：Web Components、渐进式 Web 应用、边缘计算
+
 > 最后更新: 2026-04-27
 > 自动生成: Claude Code AI 目录生成器
