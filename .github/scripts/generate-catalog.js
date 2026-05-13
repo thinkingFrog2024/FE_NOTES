@@ -216,9 +216,18 @@ function commitChanges() {
   execSync('git config user.name "github-actions[bot]"', { encoding: 'utf-8', cwd: ROOT_DIR });
   execSync('git config user.email "github-actions[bot]@users.noreply.github.com"', { encoding: 'utf-8', cwd: ROOT_DIR });
   execSync('git add README.md', { encoding: 'utf-8', cwd: ROOT_DIR });
-  execSync('git commit -m "Update README catalog based on latest changes"', { encoding: 'utf-8', cwd: ROOT_DIR });
-  execSync('git push', { encoding: 'utf-8', cwd: ROOT_DIR });
-  console.log('变更已提交并推送');
+
+  // 检查是否有变更再提交
+  try {
+    execSync('git diff --staged --quiet', { encoding: 'utf-8', cwd: ROOT_DIR });
+    console.log('README.md 无变化，跳过提交');
+    return;
+  } catch {
+    // diff --staged --quiet 返回非零表示有变更
+    execSync('git commit -m "Update README catalog based on latest changes"', { encoding: 'utf-8', cwd: ROOT_DIR });
+    execSync('git push', { encoding: 'utf-8', cwd: ROOT_DIR });
+    console.log('变更已提交并推送');
+  }
 }
 
 main();
